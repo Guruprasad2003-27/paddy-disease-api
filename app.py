@@ -1,66 +1,73 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import tensorflow as tf
 import numpy as np
-from PIL import Image
 import io
+from PIL import Image
+import tensorflow as tf
+from tensorflow.keras.utils import img_to_array
+from recommendation import recommend_treatment
 
 app = Flask(__name__)
 CORS(app)
-
+# ✅ Load model (IMPORTANT: compile=False)
 model = tf.keras.models.load_model("best_model7.h5", compile=False)
 
-CLASS_NAMES = [
-    "Bacterial Leaf Blight",
-    "Bacterial Leaf Streak",
-    "Bacterial Panicle Blight",
-    "Blast",
-    "Brown Spot",
-    "Dead Heart",
-    "Downy Mildew",
-    "Hispa",
-    "Healthy",
-    "Tungro"
+# ✅ Class labels (must match training order)
+class_names = [
+    "bacterial_leaf_blight",
+    "bacterial_leaf_streak",
+    "bacterial_panicle_blight",
+    "bacterial_panicle_blight",
+    "blast",
+    "brown_spot",
+    "dead_heart",
+    "downy_mildew",
+    "hispa",
+    "normal",
+    "tungro"
 ]
 
-IMG_SIZE = 224
-
-def preprocess_image(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    image = image.resize((IMG_SIZE, IMG_SIZE))
-    image = np.array(image) / 255.0
-    image = np.expand_dims(image, axis=0)
-    return image
-
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
-    return jsonify({"status": "Paddy Disease API Running"})
+    return "✅ Paddy Disease Detection API is running"
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    file = request.files["image"]
+
     try:
-        if "image" not in request.files:
-            return jsonify({"error": "No image uploaded"}), 400
+        # ✅ Read image from request
+        image = Image.open(io.BytesIO(file.read())).convert("RGB")
+        image = image.resize((224, 224))
 
-        image_file = request.files["image"]
-        image_bytes = image_file.read()
+        # ✅ Preprocess
+        img_array = img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = img_array / 255.0
 
-        img = preprocess_image(image_bytes)
-        predictions = model.predict(img)[0]
+        # ✅ Prediction
+        predictions = model.predict(img_array)
+        class_idx = int(np.argmax(predictions))
+        confidence = float(np.max(predictions)) * 100
 
-        class_index = int(np.argmax(predictions))
-        confidence = float(np.max(predictions))
+        disease = class_names[class_idx]
+        recommendation = recommend_treatment(disease)
 
         return jsonify({
-            "disease": CLASS_NAMES[class_index],
-            "confidence": round(confidence * 100, 2)
+            "disease": disease,
+            "confidence": round(confidence, 2),
+            "fertilizer": recommendation["fertilizer"],
+            "medicine": recommendation["medicine"],
+            "advice": recommendation["advice"]
         })
 
     except Exception as e:
-        return jsonify({
-            "error": "Prediction failed",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run()
+
+# ⚠️ IMPORTANT FOR RENDER
+# ❌ Do NOT use app.run() in production
+# Gunicorn will handle running the app
