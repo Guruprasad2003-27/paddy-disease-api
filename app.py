@@ -8,7 +8,7 @@ import io
 app = Flask(__name__)
 CORS(app)
 
-model = tf.keras.models.load_model("best_model7.h5")
+model = tf.keras.models.load_model("best_model7.h5", compile=False)
 
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
