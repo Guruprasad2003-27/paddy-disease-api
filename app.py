@@ -17,9 +17,12 @@ def predict():
     file = request.files['file']
     # TEMP dummy response (we’ll connect model later)
     return jsonify({
-        "prediction": "Healthy",
-        "confidence": "95%"
-    })
+    "disease": disease_name,
+    "confidence": round(confidence * 100, 2),
+    "fertilizer": fertilizer,
+    "medicine": medicine,
+    "advice": advice
+})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
